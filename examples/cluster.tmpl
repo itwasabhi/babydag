@@ -1,0 +1,10 @@
+#!/bin/bash
+# Custom sbatch template for rl_pipeline.py. Text above the %%job line is emitted
+# once; the block below it is emitted once per job. Use $$ for a literal $.
+#   python examples/rl_pipeline.py generate 0 --template examples/cluster.tmpl
+set -euo pipefail
+echo "submitting ${n_jobs} jobs"
+%%job
+${id}=$$(sbatch --parsable --partition=gpu --gres=gpu:1 --time=04:00:00 \
+    --job-name=${name} ${dependency_flag} \
+    --wrap=${command_quoted} | cut -d';' -f1)
