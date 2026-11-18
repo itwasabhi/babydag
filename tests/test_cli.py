@@ -154,3 +154,10 @@ def test_dinner_example_runs_in_order_and_resumes(root, capsys):
     assert "Nothing to run." in capsys.readouterr().out
     main(dinner.Dinner, ["run", "0", "--only", "^cook", "--rerun", "--no-deps"])
     assert "1 selected" in capsys.readouterr().out
+
+
+def test_main_root_dir_overrides_env(root, tmp_path, capsys):
+    custom = tmp_path / "custom"
+    main(Params, ["run", "0"], root_dir=custom)
+    assert (custom / "Params" / "Params_0").exists()
+    assert not root.exists()

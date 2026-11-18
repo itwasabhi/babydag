@@ -7,7 +7,7 @@
 An experiment is a plain class with a `build(self, plan)` method. Its public,
 non-callable class attributes are its params, settable as `--name value`.
 Optionally define `experiment_dir(self, seed) -> str` (relative to
-$BABYDAG_ROOT); the default is `<Class>/<Class>_<seed>`. `generate` defaults can
+$BABYDAG_ROOT, or the `root_dir` passed to main()); the default is `<Class>/<Class>_<seed>`. `generate` defaults can
 also be set per experiment: `template(self)` returns a Template object or a
 `--template` spec string (default: shell), and `python(self)` returns the command
 jobs use to run python, e.g. "uv run python" (default: python).
@@ -21,6 +21,7 @@ import shlex
 import shutil
 import sys
 from collections.abc import Sequence
+from os import PathLike
 from pathlib import Path
 from typing import Any
 
@@ -39,8 +40,15 @@ def experiment_dir(inst: Any, seed: int) -> str:
     return f"{name}/{name}_{seed}"
 
 
-def build_plan(cls: type, params: dict[str, Any] | None = None, seed: int = 0) -> Plan:
-    """Instantiates the experiment with `params` and builds its Plan."""
+def _resolve_root(root: str | PathLike[str] | None) -> Path:
+    return Path(root).expanduser().resolve() if root is not None else root_dir()
+
+
+def build_plan(
+    cls: type, params: dict[str, Any] | None = None, seed: int = 0,
+    root: str | PathLike[str] | None = None,
+) -> Plan:
+    """Instantiates the experiment with `params` and builds its Plan under `root` (default: root_dir())."""
     params = params or {}
     valid = param_names(cls)
     for key in params:
@@ -51,7 +59,7 @@ def build_plan(cls: type, params: dict[str, Any] | None = None, seed: int = 0) -
     inst = cls()
     for key, value in params.items():
         setattr(inst, key, value)
-    plan = Plan(root_dir() / experiment_dir(inst, seed), seed)
+    plan = Plan(_resolve_root(root) / experiment_dir(inst, seed), seed)
     inst.build(plan)
     return plan
 
@@ -94,8 +102,13 @@ def _script_target(cls: type) -> str:
     return f"-m {module}"
 
 
-def main(cls: type, argv: Sequence[str] | None = None) -> None:
-    """CLI entrypoint for an experiment module: `babydag.main(MyExperiment)`."""
+def main(
+    cls: type, argv: Sequence[str] | None = None, root_dir: str | PathLike[str] | None = None
+) -> None:
+    """CLI entrypoint for an experiment module: `babydag.main(MyExperiment)`.
+
+    `root_dir` is where experiments live; it overrides $BABYDAG_ROOT (default ~/babydag).
+    """
     defaults = {k: getattr(cls, k) for k in param_names(cls)}
 
     common = argparse.ArgumentParser(add_help=False)
@@ -127,14 +140,14 @@ def main(cls: type, argv: Sequence[str] | None = None) -> None:
         k[len("param_"):]: v for k, v in vars(args).items() if k.startswith("param_")
     }
     if args.command == "run" and args.fresh:
-        inst_dir = root_dir() / experiment_dir(_instance(cls, params), args.seed)
+        inst_dir = _resolve_root(root_dir) / experiment_dir(_instance(cls, params), args.seed)
         if args.dry_run:
             print(f"--fresh --dry-run: would remove {inst_dir}")
         elif inst_dir.exists():
             print(f"--fresh: removing {inst_dir}")
             shutil.rmtree(inst_dir)
 
-    plan = build_plan(cls, params, args.seed)
+    plan = build_plan(cls, params, args.seed, root_dir)
     chosen = dag.select(
         plan.stages, args.only, include_finished=args.rerun, with_deps=not args.no_deps
     )

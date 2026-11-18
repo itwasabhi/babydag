@@ -6,7 +6,7 @@ The core idea is to define an experiment as a `Plan`, which is directed-acyclic-
 - Run large multi-stage experiments on an HPC
 - Re-run portions of the experiment (and downstream components) as needed
 - Seperate orchestration from algorithm implementations
-
+- Organize experiment artifacts
 
 For example, orchestrate an experiment to *make dinner*: 
 ```python
@@ -68,6 +68,19 @@ python dinner.py run 0 --only 'cook' --rerun    # redo just the cooking (regex o
 
 Each finished stage leaves a marker file, so a crashed or interrupted run picks up where
 it left off. 
+
+```
+tree -a ~/babydag/Dinner/Dinner_0/
+├── .babydag
+│   └── markers
+│       ├── buy_groceries.done
+│       ├── chop_vegetables.done
+│       ├── cook_vegetables.done
+│       └── plate.done
+├── chopped.txt
+├── groceries.txt
+└── stew.txt
+```
 
 
 ## Development
